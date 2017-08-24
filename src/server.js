@@ -4,9 +4,9 @@ const session = require('express-session');
 const User = require('./user');
 const bcrypt = require('bcrypt');
 
+const STATUS_OK = 200;
 const STATUS_USER_ERROR = 422;
 const BCRYPT_COST = 11;
-const Promise = global.Promise;
 
 const server = express();
 // to enable parsing of json bodies for post requests
@@ -26,6 +26,42 @@ const sendUserError = (err, res) => {
   }
 };
 
+server.use('/restricted/*', (req, res, next) => {
+  const { userID } = req.session;
+  if (!userID) {
+    sendUserError('Please login', res);
+    return;
+  }
+  User.findById(userID, (err, user) => {
+    if (err) {
+      sendUserError(err, res);
+      return;
+    }
+    req.user = user;
+    next();
+  });
+});
+
+const validation = (req, res, next) => {
+  const { userID } = req.session;
+  if (!userID) {
+    sendUserError('Please login', res);
+    return;
+  }
+  User.findById(userID, (err, user) => {
+    if (err) {
+      sendUserError(err, res);
+      return;
+    }
+    req.user = user;
+    next();
+  });
+};
+
+server.get('/restricted/something', (req, res) => {
+  res.json({ success: 'you have restricted access' });
+});
+
 server.post('/users', (req, res) => {
   const { username, password } = req.body;
   if (!password) {
@@ -39,15 +75,38 @@ server.post('/users', (req, res) => {
       sendUserError(error, res);
       return;
     }
-    res.status(200);
+    res.status(STATUS_OK);
     res.json(user);
   });
 });
 
-server.post('/log-in');
+server.post('/log-in', (req, res) => {
+  const { username, password } = req.body;
+  User.findOne({ username }).exec((err, user) => {
+    if (err) {
+      sendUserError(err, res);
+      return;
+    }
+    if (!user) {
+      sendUserError('cannot find user', res);
+      return;
+    }
+    if (!password) {
+      sendUserError('no password provided', res);
+      return;
+    }
+    if (bcrypt.compareSync(password, user.passwordHash)) {
+      req.session.userID = user.id;
+      res.status(STATUS_OK);
+      res.json({ success: true });
+      return;
+    }
+    sendUserError('invalid password', res);
+  });
+});
 
 // TODO: add local middleware to this route to ensure the user is logged in
-server.get('/me', (req, res) => {
+server.get('/me', validation, (req, res) => {
   // Do NOT modify this route handler in any way.
   res.json(req.user);
 });
