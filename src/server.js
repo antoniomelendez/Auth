@@ -3,6 +3,7 @@ const express = require('express');
 const session = require('express-session');
 const User = require('./user');
 const bcrypt = require('bcrypt');
+const cors = require('cors');
 
 const STATUS_OK = 200;
 const STATUS_USER_ERROR = 422;
@@ -14,7 +15,7 @@ server.use(bodyParser.json());
 server.use(session({
   secret: 'e5SPiqsEtjexkTj3Xqovsjzq8ovjfgVDFMfUzSmJO21dtXs4re'
 }));
-
+server.use(cors());
 /* Sends the given err, a string or an object, to the client. Sets the status
  * code appropriately. */
 const sendUserError = (err, res) => {
@@ -80,7 +81,7 @@ server.post('/users', (req, res) => {
   });
 });
 
-server.post('/log-in', (req, res) => {
+server.post('/login', (req, res) => {
   const { username, password } = req.body;
   User.findOne({ username }).exec((err, user) => {
     if (err) {
@@ -103,6 +104,11 @@ server.post('/log-in', (req, res) => {
     }
     sendUserError('invalid password', res);
   });
+});
+
+server.post('/logout', validation, (req, res) => {
+  req.session.destroy();
+  res.json({ success: true });
 });
 
 // TODO: add local middleware to this route to ensure the user is logged in
